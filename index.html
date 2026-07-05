@@ -241,7 +241,7 @@
 (function(){
 
 const DAY_NAMES_FULL = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
-const COLOR_CYCLE = ['teal','coral','pink','green','red','gray'];
+const COLOR_CYCLE = ['#1d9e75','#d85a30','#d4537e','#639922','#e24b4a','#888780'];
 const POSTEN_PALETTE = [
   {bg:'#e1f5ee', text:'#085041'},
   {bg:'#faece7', text:'#712b13'},
@@ -291,9 +291,9 @@ let state = {
     {id: 'e6', name: 'Thomas Huber', code: 'TH2N7', competencies: ['p2'], maxShiftsPerDay: 1}
   ],
   shiftTypes: [
-    {id: 'fr', name: 'Früh', time: '06:00–14:00', color: 'blue'},
-    {id: 'sp', name: 'Spät', time: '14:00–22:00', color: 'amber'},
-    {id: 'na', name: 'Nacht', time: '22:00–06:00', color: 'purple'}
+    {id: 'fr', name: 'Früh', time: '06:00–14:00', color: '#378add'},
+    {id: 'sp', name: 'Spät', time: '14:00–22:00', color: '#ef9f27'},
+    {id: 'na', name: 'Nacht', time: '22:00–06:00', color: '#7f77dd'}
   ],
   posten: [
     {id: 'p1', name: 'Roboterzelle 1', bg: '#e1f5ee', text: '#085041'},
@@ -620,6 +620,12 @@ function addShiftType(){
   nameEl.value=''; startEl.value=''; endEl.value='';
   render();
 }
+function setShiftColor(id, hex){
+  const st = state.shiftTypes.find(s=>s.id===id);
+  if (!st) return;
+  st.color = hex;
+  render();
+}
 function removeShiftType(id){
   state.shiftTypes = state.shiftTypes.filter(s=>s.id!==id);
   Object.keys(state.postenAssignments).forEach(dKey=>{
@@ -877,7 +883,8 @@ function renderEmployeeView(){
 
   state.shiftTypes.forEach(st=>{
     const checked = isAvailable(empId, dKey, st.id);
-    html += '<label class="emp-shift-option'+(checked?' c-'+st.color:'')+(isUnavail?' emp-shift-disabled':'')+'">';
+    const checkedStyle = checked ? ' style="background:color-mix(in srgb, '+st.color+' 18%, var(--surface)); color:'+st.color+'; border-color:'+st.color+';"' : '';
+    html += '<label class="emp-shift-option'+(isUnavail?' emp-shift-disabled':'')+'"'+checkedStyle+'>';
     html += '<input type="checkbox" data-avail-emp="'+empId+'" data-avail-shift="'+st.id+'"'+(checked?' checked':'')+(isUnavail?' disabled':'')+' />';
     html += '<span>'+st.name+'</span><span class="emp-shift-time">'+st.time+'</span>';
     html += '</label>';
@@ -1095,11 +1102,16 @@ function renderAdminView(){
   html += '<p class="panel-label">Schichttypen</p>';
   html += '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">';
   state.shiftTypes.forEach(st=>{
-    html += '<div class="chip">';
-    html += '<span class="chip-dot dot-'+st.color+'"></span>';
+    html += '<div class="chip" style="justify-content:space-between;">';
+    html += '<span style="display:flex; align-items:center; gap:8px;">';
+    html += '<span class="chip-dot" style="background:'+st.color+';"></span>';
     html += '<span style="font-weight:600;">'+st.name+'</span>';
     html += '<span style="font-size:12px; color:#6b6a63;">'+st.time+'</span>';
+    html += '</span>';
+    html += '<span style="display:flex; align-items:center; gap:10px;">';
+    html += '<label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#6b6a63;">Farbe <input type="color" value="'+st.color+'" data-shift-color="'+st.id+'" style="width:30px; height:24px; padding:0; border:1px solid #d6d3c9;" /></label>';
     html += '<button class="chip-remove" data-remove-shift="'+st.id+'" aria-label="Schicht entfernen">&times;</button>';
+    html += '</span>';
     html += '</div>';
   });
   html += '</div>';
@@ -1158,6 +1170,25 @@ function renderAdminView(){
     } else {
       html += '<p class="hint" style="margin:0;">Lege oben Posten an, um Kompetenzen zuzuweisen.</p>';
     }
+    if (state.shiftTypes.length) {
+      const isUnavailToday = !!(state.unavailable[emp.id] && state.unavailable[emp.id][dKey]);
+      html += '<div style="margin-top:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">';
+      html += '<span style="font-size:12px; color:var(--text-muted);">Verf&uuml;gbar am '+fmtDate(state.selectedDate)+':</span>';
+      if (isUnavailToday) {
+        html += '<span class="hint" style="margin:0;">Als nicht verf&uuml;gbar gemeldet</span>';
+      } else {
+        const availableShifts = state.shiftTypes.filter(st=>isAvailable(emp.id, dKey, st.id));
+        if (availableShifts.length) {
+          availableShifts.forEach(st=>{
+            html += '<span class="chip-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:'+st.color+';"></span>';
+            html += '<span style="font-size:12px; margin-right:8px;">'+st.name+'</span>';
+          });
+        } else {
+          html += '<span class="hint" style="margin:0;">Keine Verf&uuml;gbarkeit gemeldet</span>';
+        }
+      }
+      html += '</div>';
+    }
     const cardWish = getWish(emp.id, dKey);
     if (cardWish) {
       html += '<p style="font-size:12px; margin:8px 0 0; color:var(--text-muted);"><strong style="color:var(--text);">Wunsch f&uuml;r '+fmtDate(state.selectedDate)+':</strong> '+cardWish+'</p>';
@@ -1181,7 +1212,7 @@ function renderAdminView(){
   state.shiftTypes.forEach(st=>{
     html += '<div class="shift-card">';
     html += '<div class="shift-card-head">';
-    html += '<span class="chip-dot dot-'+st.color+'"></span>';
+    html += '<span class="chip-dot" style="background:'+st.color+';"></span>';
     html += '<span style="font-weight:600; font-size:14px;">'+st.name+'</span>';
     html += '<span style="font-size:12px; color:#6b6a63;">'+st.time+'</span>';
     html += '</div>';
@@ -1278,6 +1309,9 @@ function wireAdminView(){
   });
   app.querySelectorAll('[data-remove-posten]').forEach(el=>{
     el.onclick = ()=>removePosten(el.getAttribute('data-remove-posten'));
+  });
+  app.querySelectorAll('[data-shift-color]').forEach(el=>{
+    el.onchange = ()=>setShiftColor(el.getAttribute('data-shift-color'), el.value);
   });
   app.querySelectorAll('[data-posten-color-bg]').forEach(el=>{
     el.onchange = ()=>setPostenColor(el.getAttribute('data-posten-color-bg'), 'bg', el.value);
