@@ -151,7 +151,7 @@
   .dot-gray   { background:#888780; }
 
   @media print {
-    button, .footer-row, #new-emp-name, .panel, .view-switch { display:none !important; }
+    button, .footer-row, #new-emp-name, .panel, .view-switch, .toast-wrap { display:none !important; }
     .print-only { display:block !important; }
     :root, [data-theme="dark"] {
       --bg: #ffffff;
@@ -243,6 +243,37 @@
   .modal-box {
     background:var(--surface); border-radius:12px; padding:20px; width:100%; max-width:340px;
     border:1px solid var(--border);
+  }
+  .btn-danger { background:#b3261e; color:#fff; border-color:#b3261e; }
+  .btn-danger:hover { background:#8f1e17; }
+
+  .toast-wrap {
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    z-index:60; pointer-events:none; display:flex; flex-direction:column; align-items:center;
+  }
+  .toast {
+    background:var(--active-bg); color:var(--active-text); font-size:13px; font-weight:600;
+    padding:10px 18px; border-radius:999px; box-shadow:0 4px 18px rgba(0,0,0,0.28);
+    white-space:nowrap; animation: toast-in-out 2.2s ease forwards;
+  }
+  .toast-error { background:#b3261e; color:#fff; }
+  @keyframes toast-in-out {
+    0% { opacity:0; transform:translateY(10px); }
+    10% { opacity:1; transform:translateY(0); }
+    88% { opacity:1; transform:translateY(0); }
+    100% { opacity:0; transform:translateY(-6px); }
+  }
+
+  /* Größere Tippflächen auf schmalen Bildschirmen (Handy) */
+  @media (max-width: 640px) {
+    button { padding:11px 16px; min-height:44px; }
+    input, select { min-height:44px; }
+    input[type="checkbox"] { width:20px; height:20px; }
+    .chip-remove { width:34px; height:34px; font-size:17px; }
+    .theme-toggle { width:44px; }
+    .emp-shift-option { padding:12px 14px; }
+    .emp-shift-option input { width:20px; height:20px; }
+    .comp-tag { padding:10px 14px; font-size:13px; }
   }
 </style>
 <script>
@@ -344,6 +375,9 @@ let state = {
   employeeViewJustRegisteredCode: null,
   selfRegisterError: null,
   collapsedPanels: {},
+  employeeShiftsExpanded: false,
+  confirmModal: null,
+  toast: null,
   syncStatus: 'offline'
 };
 
@@ -358,6 +392,7 @@ const CLOUD_SYNC_KEYS = [
 ];
 let applyingRemoteUpdate = false;
 let cloudSaveTimer = null;
+let initialDateJumpApplied = false;
 
 const SYNC_STATUS_LABELS = {
   saving: '&#8635; Speichert\u2026',
@@ -398,10 +433,21 @@ function restoreRememberedLogin(){
   }
 }
 function mergeIncomingState(remote){
-  if (!remote) { setSyncStatus('saved'); return; } // noch kein Dokument in der Cloud vorhanden, aber Verbindung steht
+  if (!remote) {
+    setSyncStatus('saved');
+    if (!initialDateJumpApplied) {
+      initialDateJumpApplied = true;
+      if (state.view === 'employee' || state.view === 'daily') { state.selectedDate = getNextOpenDate(); render(); }
+    }
+    return;
+  } // noch kein Dokument in der Cloud vorhanden, aber Verbindung steht
   applyingRemoteUpdate = true;
   CLOUD_SYNC_KEYS.forEach(k => { if (remote[k] !== undefined) state[k] = remote[k]; });
   restoreRememberedLogin();
+  if (!initialDateJumpApplied) {
+    initialDateJumpApplied = true;
+    if (state.view === 'employee' || state.view === 'daily') { state.selectedDate = getNextOpenDate(); }
+  }
   render();
   setSyncStatus('saved');
   applyingRemoteUpdate = false;
@@ -461,6 +507,39 @@ function shiftsAssignedCount(empId, dKey){
   });
   return count;
 }
+function relativeDayLabel(d){
+  const diffDays = Math.round((d - today()) / 86400000);
+  if (diffDays === 0) return 'Heute';
+  if (diffDays === 1) return 'Morgen';
+  return null;
+}
+function getUpcomingShiftsForEmployee(empId){
+  const todayKey = dateKey(today());
+  const result = [];
+  Object.keys(state.postenAssignments || {}).forEach(dKey=>{
+    if (dKey < todayKey) return;
+    const shiftsForDay = state.postenAssignments[dKey];
+    Object.keys(shiftsForDay).forEach(shiftId=>{
+      const slots = shiftsForDay[shiftId];
+      Object.keys(slots).forEach(postenId=>{
+        if (slots[postenId] !== empId) return;
+        const st = state.shiftTypes.find(s=>s.id===shiftId);
+        const p = state.posten.find(pp=>pp.id===postenId);
+        result.push({
+          dKey: dKey,
+          date: parseDateKey(dKey),
+          shiftName: st ? st.name : '?',
+          shiftTime: st ? st.time : '',
+          postenName: p ? p.name : '?',
+          postenBg: p ? (p.bg||'#f1efe8') : '#f1efe8',
+          postenText: p ? (p.text||'#444441') : '#444441'
+        });
+      });
+    });
+  });
+  result.sort((a,b)=> a.dKey < b.dKey ? -1 : (a.dKey > b.dKey ? 1 : 0));
+  return result;
+}
 function getMaxShifts(emp){
   return emp.maxShiftsPerDay || 2;
 }
@@ -489,6 +568,18 @@ function isDateOpenForEmployeeInput(d){
   if (state.availabilityWindowStart && k < state.availabilityWindowStart) return false;
   if (state.availabilityWindowEnd && k > state.availabilityWindowEnd) return false;
   return true;
+}
+function getNextOpenDate(){
+  let d = today();
+  if (state.availabilityWindowStart) {
+    const startDate = parseDateKey(state.availabilityWindowStart);
+    if (startDate > d) d = startDate;
+  }
+  if (state.availabilityWindowEnd) {
+    const endDate = parseDateKey(state.availabilityWindowEnd);
+    if (d > endDate) d = endDate;
+  }
+  return d;
 }
 function setPostenAssignment(dKey, shiftId, postenId, empId){
   ensurePostenSlot(dKey, shiftId);
@@ -532,6 +623,8 @@ function autoAssignDay(){
   render();
   if (!filled) {
     alert('Keine offenen Posten konnten automatisch besetzt werden. Stelle sicher, dass Mitarbeiter ihre Verf\u00fcgbarkeit gemeldet haben, die n\u00f6tigen Kompetenzen besitzen und ihr Tageslimit noch nicht erreicht ist.');
+  } else {
+    showToast(filled === 1 ? '1 Schicht automatisch zugewiesen' : filled+' Schichten automatisch zugewiesen');
   }
 }
 function addPosten(){
@@ -558,17 +651,18 @@ function setPostenDescription(id, value){
 function removePosten(id){
   const p = state.posten.find(x=>x.id===id);
   if (!p) return;
-  if (!window.confirm('Posten "'+p.name+'" wirklich l\u00f6schen? Zuweisungen und Kompetenzen dazu gehen verloren.')) return;
-  state.posten = state.posten.filter(p=>p.id!==id);
-  Object.keys(state.postenAssignments).forEach(dKey=>{
-    Object.keys(state.postenAssignments[dKey]).forEach(shiftId=>{
-      delete state.postenAssignments[dKey][shiftId][id];
+  showConfirm('Posten "'+p.name+'" wirklich l\u00f6schen? Zuweisungen und Kompetenzen dazu gehen verloren.', ()=>{
+    state.posten = state.posten.filter(p=>p.id!==id);
+    Object.keys(state.postenAssignments).forEach(dKey=>{
+      Object.keys(state.postenAssignments[dKey]).forEach(shiftId=>{
+        delete state.postenAssignments[dKey][shiftId][id];
+      });
     });
+    state.employees.forEach(emp=>{
+      if (emp.competencies) emp.competencies = emp.competencies.filter(pid=>pid!==id);
+    });
+    showToast('Posten gel\u00f6scht');
   });
-  state.employees.forEach(emp=>{
-    if (emp.competencies) emp.competencies = emp.competencies.filter(pid=>pid!==id);
-  });
-  render();
 }
 function toggleUnavailable(empId, dKey){
   ensureEntry(empId);
@@ -662,21 +756,22 @@ function isQualifiedForPosten(emp, postenId){
 function removeEmployee(id){
   const emp = state.employees.find(e=>e.id===id);
   if (!emp) return;
-  if (!window.confirm('Mitarbeiter "'+emp.name+'" wirklich l\u00f6schen? Alle Verf\u00fcgbarkeiten und Zuweisungen dieser Person gehen verloren.')) return;
-  state.employees = state.employees.filter(e=>e.id!==id);
-  delete state.unavailable[id];
-  delete state.availability[id];
-  delete state.wishes[id];
-  Object.keys(state.postenAssignments).forEach(dKey=>{
-    Object.keys(state.postenAssignments[dKey]).forEach(shiftId=>{
-      Object.keys(state.postenAssignments[dKey][shiftId]).forEach(postenId=>{
-        if (state.postenAssignments[dKey][shiftId][postenId] === id) {
-          state.postenAssignments[dKey][shiftId][postenId] = null;
-        }
+  showConfirm('Mitarbeiter "'+emp.name+'" wirklich l\u00f6schen? Alle Verf\u00fcgbarkeiten und Zuweisungen dieser Person gehen verloren.', ()=>{
+    state.employees = state.employees.filter(e=>e.id!==id);
+    delete state.unavailable[id];
+    delete state.availability[id];
+    delete state.wishes[id];
+    Object.keys(state.postenAssignments).forEach(dKey=>{
+      Object.keys(state.postenAssignments[dKey]).forEach(shiftId=>{
+        Object.keys(state.postenAssignments[dKey][shiftId]).forEach(postenId=>{
+          if (state.postenAssignments[dKey][shiftId][postenId] === id) {
+            state.postenAssignments[dKey][shiftId][postenId] = null;
+          }
+        });
       });
     });
+    showToast('Mitarbeiter gel\u00f6scht');
   });
-  render();
 }
 function addShiftType(){
   const nameEl = document.getElementById('new-shift-name');
@@ -707,6 +802,66 @@ function panelHeaderHtml(key, title){
   h += '</div>';
   return h;
 }
+
+// ---- Eigenes Bestätigungs-Modal (ersetzt window.confirm) ----
+function showConfirm(message, onConfirm, opts){
+  opts = opts || {};
+  state.confirmModal = {
+    message: message,
+    confirmLabel: opts.confirmLabel || 'L\u00f6schen',
+    cancelLabel: opts.cancelLabel || 'Abbrechen',
+    danger: opts.danger !== false,
+    onConfirm: onConfirm
+  };
+  render();
+}
+function closeConfirmModal(){
+  state.confirmModal = null;
+  render();
+}
+function acceptConfirmModal(){
+  const cb = state.confirmModal && state.confirmModal.onConfirm;
+  state.confirmModal = null;
+  render();
+  if (cb) cb();
+}
+function renderConfirmModal(){
+  const c = state.confirmModal;
+  let html = '<div class="modal-overlay" id="confirm-modal-overlay">';
+  html += '<div class="modal-box">';
+  html += '<p style="font-size:14px; margin:0 0 18px; line-height:1.5;">'+c.message+'</p>';
+  html += '<div style="display:flex; gap:8px; justify-content:flex-end;">';
+  html += '<button id="confirm-modal-cancel">'+c.cancelLabel+'</button>';
+  html += '<button id="confirm-modal-accept" class="'+(c.danger?'btn-danger':'')+'">'+c.confirmLabel+'</button>';
+  html += '</div></div></div>';
+  return html;
+}
+function wireConfirmModal(){
+  const overlay = document.getElementById('confirm-modal-overlay');
+  const cancelBtn = document.getElementById('confirm-modal-cancel');
+  const acceptBtn = document.getElementById('confirm-modal-accept');
+  if (cancelBtn) cancelBtn.onclick = closeConfirmModal;
+  if (acceptBtn) acceptBtn.onclick = acceptConfirmModal;
+  if (overlay) overlay.onclick = (e)=>{ if (e.target === overlay) closeConfirmModal(); };
+}
+
+// ---- Kurzes visuelles Feedback nach Aktionen (Toast) ----
+function showToast(message, type){
+  const id = Date.now() + Math.random();
+  state.toast = { message: message, id: id, type: type || 'default' };
+  render();
+  setTimeout(()=>{
+    if (state.toast && state.toast.id === id) {
+      state.toast = null;
+      render();
+    }
+  }, 2200);
+}
+function renderToast(){
+  const cls = 'toast'+(state.toast.type === 'error' ? ' toast-error' : '');
+  return '<div class="toast-wrap"><div class="'+cls+'">'+state.toast.message+'</div></div>';
+}
+
 function setShiftColor(id, hex){
   const st = state.shiftTypes.find(s=>s.id===id);
   if (!st) return;
@@ -716,12 +871,13 @@ function setShiftColor(id, hex){
 function removeShiftType(id){
   const st = state.shiftTypes.find(s=>s.id===id);
   if (!st) return;
-  if (!window.confirm('Schicht "'+st.name+'" wirklich l\u00f6schen? Zuweisungen zu dieser Schicht gehen verloren.')) return;
-  state.shiftTypes = state.shiftTypes.filter(s=>s.id!==id);
-  Object.keys(state.postenAssignments).forEach(dKey=>{
-    delete state.postenAssignments[dKey][id];
+  showConfirm('Schicht "'+st.name+'" wirklich l\u00f6schen? Zuweisungen zu dieser Schicht gehen verloren.', ()=>{
+    state.shiftTypes = state.shiftTypes.filter(s=>s.id!==id);
+    Object.keys(state.postenAssignments).forEach(dKey=>{
+      delete state.postenAssignments[dKey][id];
+    });
+    showToast('Schicht gel\u00f6scht');
   });
-  render();
 }
 function tryAdminLogin(){
   const input = document.getElementById('admin-password-input');
@@ -744,21 +900,20 @@ function changeAdminPassword(){
   const confirm = document.getElementById('admin-pw-confirm');
   if (!current || !next || !confirm) return;
   if (current.value !== state.adminPassword) {
-    alert('Das aktuelle Passwort ist falsch.');
+    showToast('Das aktuelle Passwort ist falsch.', 'error');
     return;
   }
   if (!next.value || next.value.length < 4) {
-    alert('Das neue Passwort muss mindestens 4 Zeichen lang sein.');
+    showToast('Das neue Passwort muss mindestens 4 Zeichen lang sein.', 'error');
     return;
   }
   if (next.value !== confirm.value) {
-    alert('Die Passw\u00f6rter stimmen nicht \u00fcberein.');
+    showToast('Die Passw\u00f6rter stimmen nicht \u00fcberein.', 'error');
     return;
   }
   state.adminPassword = next.value;
   state.showPasswordModal = false;
-  alert('Passwort wurde ge\u00e4ndert.');
-  render();
+  showToast('Passwort wurde ge\u00e4ndert.');
 }
 function shiftDay(delta){
   const d = new Date(state.selectedDate);
@@ -864,6 +1019,12 @@ function render(){
   if (state.showPasswordModal) {
     html += renderPasswordModal();
   }
+  if (state.confirmModal) {
+    html += renderConfirmModal();
+  }
+  if (state.toast) {
+    html += renderToast();
+  }
 
   app.innerHTML = html;
   wireViewSwitch();
@@ -872,13 +1033,14 @@ function render(){
   else if (!state.adminUnlocked) wireAdminLockScreen();
   else wireAdminView();
   if (state.showPasswordModal) wirePasswordModal();
+  if (state.confirmModal) wireConfirmModal();
   scheduleCloudSave();
 }
 
 function wireViewSwitch(){
   document.getElementById('view-admin').onclick = ()=>{ state.view='admin'; render(); };
-  document.getElementById('view-daily').onclick = ()=>{ state.view='daily'; render(); };
-  document.getElementById('view-employee').onclick = ()=>{ state.view='employee'; render(); };
+  document.getElementById('view-daily').onclick = ()=>{ state.view='daily'; state.selectedDate = getNextOpenDate(); render(); };
+  document.getElementById('view-employee').onclick = ()=>{ state.view='employee'; state.selectedDate = getNextOpenDate(); render(); };
   document.getElementById('theme-toggle').onclick = ()=>{
     const cur = document.documentElement.getAttribute('data-theme');
     document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
@@ -956,6 +1118,34 @@ function renderEmployeeView(){
   html += '</label>';
   html += '</div>';
 
+  const upcomingShifts = getUpcomingShiftsForEmployee(empId);
+  const SHIFTS_PREVIEW_COUNT = 8;
+  const expanded = state.employeeShiftsExpanded;
+  const visibleShifts = expanded ? upcomingShifts : upcomingShifts.slice(0, SHIFTS_PREVIEW_COUNT);
+  html += '<div class="panel">';
+  html += '<p class="panel-label">Meine kommenden Schichten</p>';
+  if (!upcomingShifts.length) {
+    html += '<p class="hint" style="margin:0;">Du bist aktuell f\u00fcr keine kommende Schicht eingeteilt.</p>';
+  } else {
+    html += '<div style="display:flex; flex-direction:column; gap:6px;">';
+    visibleShifts.forEach(s=>{
+      const rel = relativeDayLabel(s.date);
+      const dayText = (rel ? rel+' \u00b7 ' : '') + dayLabelFor(s.date);
+      html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid var(--border-strong); border-radius:8px;">';
+      html += '<div>';
+      html += '<div style="font-weight:600; font-size:13px;">'+dayText+'</div>';
+      html += '<div style="font-size:12px; color:var(--text-muted);">'+s.shiftName+' \u00b7 '+s.shiftTime+'</div>';
+      html += '</div>';
+      html += '<span style="background:'+s.postenBg+'; color:'+s.postenText+'; padding:4px 10px; border-radius:6px; font-weight:600; font-size:12px; white-space:nowrap;">'+s.postenName+'</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    if (upcomingShifts.length > SHIFTS_PREVIEW_COUNT) {
+      html += '<button id="toggle-my-shifts" style="margin-top:10px;">'+(expanded ? 'Weniger anzeigen' : 'Alle '+upcomingShifts.length+' anzeigen')+'</button>';
+    }
+  }
+  html += '</div>';
+
   html += '<div class="toolbar">';
   html += renderDateNav();
   html += '</div>';
@@ -1012,6 +1202,11 @@ function wireEmployeeView(){
   if (loginNameInput) loginNameInput.onkeydown = (e)=>{ if(e.key==='Enter') tryEmployeeLogin(); };
   const logoutBtn = document.getElementById('emp-logout-btn');
   if (logoutBtn) logoutBtn.onclick = employeeLogout;
+  const toggleShiftsBtn = document.getElementById('toggle-my-shifts');
+  if (toggleShiftsBtn) toggleShiftsBtn.onclick = ()=>{
+    state.employeeShiftsExpanded = !state.employeeShiftsExpanded;
+    render();
+  };
   const selfBtn = document.getElementById('add-self-emp');
   if (selfBtn) selfBtn.onclick = addSelfEmployee;
   const selfInput = document.getElementById('new-self-emp-name');
@@ -1495,16 +1690,18 @@ function wireAdminView(){
       const shiftId = el.getAttribute('data-assign-shift');
       const postenId = el.getAttribute('data-assign-posten');
       const newEmpId = el.value || null;
-      const prevEmpId = getPostenAssignment(dKey, shiftId, postenId);
+      const applyAssignment = ()=>{
+        setPostenAssignment(dKey, shiftId, postenId, newEmpId);
+        render();
+      };
       if (newEmpId) {
         const emp = state.employees.find(e=>e.id===newEmpId);
         if (emp && !isAvailable(emp.id, dKey, shiftId)) {
-          const confirmed = window.confirm(emp.name+' hat diese Schicht nicht als verf\u00fcgbar gemeldet. Trotzdem zuweisen?');
-          if (!confirmed) { el.value = prevEmpId || ''; return; }
+          showConfirm(emp.name+' hat diese Schicht nicht als verf\u00fcgbar gemeldet. Trotzdem zuweisen?', applyAssignment, {confirmLabel:'Trotzdem zuweisen', danger:false});
+          return;
         }
       }
-      setPostenAssignment(dKey, shiftId, postenId, newEmpId);
-      render();
+      applyAssignment();
     };
   });
 }
