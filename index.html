@@ -637,12 +637,27 @@ function setPostenAssignment(dKey, shiftId, postenId, empId){
   }
   state.postenAssignments[dKey][shiftId][postenId] = empId;
 }
+// Startzeit einer Schicht in Minuten (für zeitliche Sortierung), null wenn nicht lesbar
+function shiftStartMinutes(st){
+  if (!st || !st.time) return null;
+  const parts = st.time.split('\u2013');
+  if (parts.length !== 2) return null;
+  const nums = parts[0].split(':').map(Number);
+  if (nums.length !== 2 || nums.some(n=>isNaN(n))) return null;
+  return nums[0]*60 + nums[1];
+}
 // Prüft, ob eine (zusätzliche) Zuweisung dazu führen würde, dass der Mitarbeiter
 // 3 Schichten direkt hintereinander hätte (ohne Pausen-Schicht dazwischen).
-// Grundlage ist die Reihenfolge der Schichttypen (= Tagesablauf).
+// Die Schichten werden dafür nach ihrer STARTZEIT sortiert (nicht nach Listen-Reihenfolge),
+// damit später hinzugefügte Schichten korrekt eingeordnet werden.
 function wouldCreateTripleRun(empId, dKey, extraShiftId){
+  const ordered = state.shiftTypes.slice().sort((a,b)=>{
+    const sa = shiftStartMinutes(a), sb = shiftStartMinutes(b);
+    if (sa === null || sb === null) return 0; // Zeit nicht lesbar: Original-Reihenfolge behalten
+    return sa - sb;
+  });
   const indices = [];
-  state.shiftTypes.forEach((st, idx)=>{
+  ordered.forEach((st, idx)=>{
     if (st.id === extraShiftId || findPostenForEmployeeInShift(dKey, st.id, empId)) indices.push(idx);
   });
   for (let i = 0; i + 2 < indices.length; i++){
@@ -813,6 +828,25 @@ function toggleEmployeeCompetency(empId, postenId){
 }
 function isQualifiedForPosten(emp, postenId){
   return emp.competencies && emp.competencies.indexOf(postenId) >= 0;
+}
+// Löscht die Schicht-Zuweisungen eines Mitarbeiters für den aktuell gewählten Tag, nach Bestätigung
+function clearEmployeeAssignments(empId){
+  const emp = state.employees.find(e=>e.id===empId);
+  if (!emp) return;
+  const dk = dateKey(state.selectedDate);
+  showConfirm('Alle Schicht-Zuweisungen von "'+emp.name+'" am '+fmtDate(state.selectedDate)+' l\u00f6schen?', ()=>{
+    let cleared = 0;
+    const day = state.postenAssignments[dk];
+    if (day) {
+      Object.keys(day).forEach(shiftId=>{
+        const slots = day[shiftId];
+        Object.keys(slots).forEach(pid=>{
+          if (slots[pid] === empId) { slots[pid] = null; cleared++; }
+        });
+      });
+    }
+    showToast(cleared ? (cleared === 1 ? '1 Zuweisung gel\u00f6scht' : cleared+' Zuweisungen gel\u00f6scht') : 'Keine Zuweisungen an diesem Tag');
+  }, {confirmLabel:'L\u00f6schen'});
 }
 function removeEmployee(id){
   const emp = state.employees.find(e=>e.id===id);
@@ -1544,6 +1578,7 @@ function renderAdminView(){
     html += '<span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Code <input type="text" value="'+(emp.code||'')+'" data-code-emp="'+emp.id+'" maxlength="8" style="width:80px; height:28px; padding:4px 6px; font-family:monospace; font-size:13px; letter-spacing:1px; text-transform:uppercase;" /> <button data-regen-code-emp="'+emp.id+'" title="Zuf&auml;lligen Code generieren" style="padding:4px 8px; font-size:11px;">&#8635;</button></span>';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Telefon <input type="tel" value="'+(emp.phone||'')+'" placeholder="Telefonnummer" data-phone-emp="'+emp.id+'" style="width:140px; height:30px; padding:4px 8px;" /></label>';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Max. Schichten/Tag <input type="number" min="1" max="'+state.shiftTypes.length+'" value="'+getMaxShifts(emp)+'" data-max-shifts-emp="'+emp.id+'" style="width:54px; height:30px; padding:4px 6px; text-align:center;" /></label>';
+    html += '<button data-clear-assign-emp="'+emp.id+'" title="Alle Schicht-Zuweisungen dieses Mitarbeiters l&ouml;schen" style="padding:4px 10px; font-size:11px;">Zuweisungen l&ouml;schen</button>';
     html += '<button class="chip-remove" data-remove-emp="'+emp.id+'" aria-label="Mitarbeiter entfernen">&times;</button>';
     html += '</div></div>';
     if (state.posten.length) {
@@ -1732,6 +1767,9 @@ function wireAdminView(){
 
   app.querySelectorAll('[data-remove-emp]').forEach(el=>{
     el.onclick = ()=>removeEmployee(el.getAttribute('data-remove-emp'));
+  });
+  app.querySelectorAll('[data-clear-assign-emp]').forEach(el=>{
+    el.onclick = ()=>clearEmployeeAssignments(el.getAttribute('data-clear-assign-emp'));
   });
   app.querySelectorAll('[data-max-shifts-emp]').forEach(el=>{
     el.onchange = ()=>{ setMaxShifts(el.getAttribute('data-max-shifts-emp'), el.value); render(); };
