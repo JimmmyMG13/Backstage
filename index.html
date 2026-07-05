@@ -1077,7 +1077,7 @@ function renderDailyView(){
 
   sortedEmployees.forEach(emp=>{
     const nameCell = emp.phone
-      ? emp.name+' <a href="tel:'+emp.phone.replace(/\s+/g,'')+'" style="color:var(--text-muted); text-decoration:none; font-weight:400; font-size:12px;" title="'+emp.phone+' anrufen">&#128222;</a>'
+      ? emp.name+' <a href="tel:'+emp.phone.replace(/\s+/g,'')+'" target="_top" style="color:var(--text-muted); text-decoration:none; font-weight:400; font-size:12px;" title="'+emp.phone+' anrufen">&#128222;</a>'
       : emp.name;
     html += '<tr><td style="text-align:left; font-weight:600; padding:10px 12px;">'+nameCell+'</td>';
     let totalHours = 0;
@@ -1283,7 +1283,7 @@ function renderAdminView(){
   [...state.employees].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(emp=>{
     html += '<div class="emp-card">';
     html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
-    html += '<span style="font-weight:600;">'+emp.name+(emp.phone ? ' <a href="tel:'+emp.phone.replace(/\s+/g,'')+'" style="color:var(--text-muted); text-decoration:none; font-weight:400; font-size:12px;" title="'+emp.phone+' anrufen">&#128222;</a>' : '')+'</span>';
+    html += '<span style="font-weight:600;">'+emp.name+(emp.phone ? ' <a href="tel:'+emp.phone.replace(/\s+/g,'')+'" target="_top" style="color:var(--text-muted); text-decoration:none; font-weight:400; font-size:12px;" title="'+emp.phone+' anrufen">&#128222;</a>' : '')+'</span>';
     html += '<div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">';
     html += '<span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Code <input type="text" value="'+(emp.code||'')+'" data-code-emp="'+emp.id+'" maxlength="8" style="width:80px; height:28px; padding:4px 6px; font-family:monospace; font-size:13px; letter-spacing:1px; text-transform:uppercase;" /> <button data-regen-code-emp="'+emp.id+'" title="Zuf&auml;lligen Code generieren" style="padding:4px 8px; font-size:11px;">&#8635;</button></span>';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Telefon <input type="tel" value="'+(emp.phone||'')+'" placeholder="Telefonnummer" data-phone-emp="'+emp.id+'" style="width:140px; height:30px; padding:4px 8px;" /></label>';
@@ -1402,7 +1402,7 @@ function renderAdminView(){
     const comps = state.posten.filter(p=>isQualifiedForPosten(emp,p.id)).map(p=>p.name).join(', ');
     html += '<tr>';
     html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+emp.name+'</td>';
-    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+(emp.phone? '<a href="tel:'+emp.phone.replace(/\s+/g,'')+'" style="color:inherit; text-decoration:underline;">'+emp.phone+'</a>' : '\u2013')+'</td>';
+    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+(emp.phone? '<a href="tel:'+emp.phone.replace(/\s+/g,'')+'" target="_top" style="color:inherit; text-decoration:underline;">'+emp.phone+'</a>' : '\u2013')+'</td>';
     html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+(comps||'\u2013')+'</td>';
     html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+getMaxShifts(emp)+'</td>';
     html += '</tr>';
