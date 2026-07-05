@@ -1537,12 +1537,32 @@ function renderAdminView(){
   }
 
   state.shiftTypes.forEach(st=>{
+    const panelKey = 'shift:'+st.id;
+    // Schicht-Karten sind standardmäßig EINgeklappt (wie die Panels oben)
+    const shiftCollapsed = isPanelCollapsed(panelKey);
+    const unfilledCount = state.posten.filter(p=>{
+      const aId = getPostenAssignment(dKey, st.id, p.id);
+      if (!aId) return true;
+      const aEmp = state.employees.find(e=>e.id===aId);
+      return !aEmp || !isQualifiedForPosten(aEmp, p.id);
+    }).length;
     html += '<div class="shift-card">';
-    html += '<div class="shift-card-head">';
+    html += '<div class="shift-card-head" data-toggle-panel="'+panelKey+'" style="cursor:pointer; margin-bottom:'+(shiftCollapsed?'0':'8px')+';">';
     html += '<span class="chip-dot" style="background:'+st.color+';"></span>';
     html += '<span style="font-weight:600; font-size:14px;">'+st.name+'</span>';
     html += '<span style="font-size:12px; color:#6b6a63;">'+st.time+'</span>';
+    if (shiftCollapsed) {
+      if (unfilledCount > 0) {
+        html += '<span class="posten-warning-badge" style="margin-left:auto;">&#9888; '+unfilledCount+' von '+state.posten.length+' Posten unbesetzt</span>';
+      } else {
+        html += '<span style="margin-left:auto; color:var(--active-bg); font-size:11px; font-weight:600; white-space:nowrap;">&#10003; komplett besetzt</span>';
+      }
+    } else {
+      html += '<span style="margin-left:auto;"></span>';
+    }
+    html += '<span style="font-size:12px; color:var(--text-muted); margin-left:8px;">'+(shiftCollapsed?'\u25b8':'\u25be')+'</span>';
     html += '</div>';
+    if (!shiftCollapsed) {
     state.posten.forEach(p=>{
       let assignedId = getPostenAssignment(dKey, st.id, p.id);
       const qualifiedEmployees = state.employees.filter(emp=>isQualifiedForPosten(emp, p.id));
@@ -1580,6 +1600,7 @@ function renderAdminView(){
       }
       html += '</div>';
     });
+    }
     html += '</div>';
   });
 
