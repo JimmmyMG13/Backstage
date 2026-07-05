@@ -283,12 +283,12 @@ function fmtHours(h){
 let state = {
   selectedDate: today(),
   employees: [
-    {id: 'e1', name: 'Anna Keller', code: 'AK4X9', competencies: ['p1'], maxShiftsPerDay: 1},
-    {id: 'e2', name: 'Marco Brunner', code: 'MB7Q2', competencies: ['p2'], maxShiftsPerDay: 1},
-    {id: 'e3', name: 'Sofia Weber', code: 'SW3R8', competencies: ['p1','p3'], maxShiftsPerDay: 1},
-    {id: 'e4', name: 'David Meier', code: 'DM5T6', competencies: [], maxShiftsPerDay: 1},
-    {id: 'e5', name: 'Lena Fischer', code: 'LF9K4', competencies: ['p3'], maxShiftsPerDay: 1},
-    {id: 'e6', name: 'Thomas Huber', code: 'TH2N7', competencies: ['p2'], maxShiftsPerDay: 1}
+    {id: 'e1', name: 'Anna Keller', code: 'AK4X9', competencies: ['p1'], maxShiftsPerDay: 2},
+    {id: 'e2', name: 'Marco Brunner', code: 'MB7Q2', competencies: ['p2'], maxShiftsPerDay: 2},
+    {id: 'e3', name: 'Sofia Weber', code: 'SW3R8', competencies: ['p1','p3'], maxShiftsPerDay: 2},
+    {id: 'e4', name: 'David Meier', code: 'DM5T6', competencies: [], maxShiftsPerDay: 2},
+    {id: 'e5', name: 'Lena Fischer', code: 'LF9K4', competencies: ['p3'], maxShiftsPerDay: 2},
+    {id: 'e6', name: 'Thomas Huber', code: 'TH2N7', competencies: ['p2'], maxShiftsPerDay: 2}
   ],
   shiftTypes: [
     {id: 'fr', name: 'Früh', time: '06:00–14:00', color: '#378add'},
@@ -410,13 +410,13 @@ function shiftsAssignedCount(empId, dKey){
   return count;
 }
 function getMaxShifts(emp){
-  return emp.maxShiftsPerDay || 1;
+  return emp.maxShiftsPerDay || 2;
 }
 function setMaxShifts(empId, value){
   const emp = state.employees.find(e=>e.id===empId);
   if (!emp) return;
   const n = parseInt(value);
-  emp.maxShiftsPerDay = (isNaN(n) || n < 1) ? 1 : n;
+  emp.maxShiftsPerDay = (isNaN(n) || n < 1) ? 2 : n;
 }
 function setEmployeePhone(empId, value){
   const emp = state.employees.find(e=>e.id===empId);
@@ -527,7 +527,7 @@ function addEmployee(){
   const name = (input.value || '').trim();
   if (!name) return;
   const phone = phoneInput ? (phoneInput.value || '').trim() : '';
-  state.employees.push({id:'e'+Date.now(), name, phone, code: generateEmployeeCode(), competencies: [], maxShiftsPerDay: 1});
+  state.employees.push({id:'e'+Date.now(), name, phone, code: generateEmployeeCode(), competencies: [], maxShiftsPerDay: 2});
   input.value = '';
   if (phoneInput) phoneInput.value = '';
   render();
@@ -535,20 +535,27 @@ function addEmployee(){
 function addSelfEmployee(){
   const input = document.getElementById('new-self-emp-name');
   const phoneInput = document.getElementById('new-self-emp-phone');
-  const codeInput = document.getElementById('new-self-emp-code');
   const name = (input.value || '').trim();
-  const code = codeInput ? (codeInput.value || '').trim().toUpperCase() : '';
+  const phone = phoneInput ? (phoneInput.value || '').trim() : '';
   state.selfRegisterError = null;
   if (!name) { state.selfRegisterError = 'Bitte einen Namen eingeben.'; render(); return; }
-  if (!code || code.length < 4) { state.selfRegisterError = 'Bitte einen Code mit mindestens 4 Zeichen w\u00e4hlen.'; render(); return; }
-  const phone = phoneInput ? (phoneInput.value || '').trim() : '';
+  if (!phone) { state.selfRegisterError = 'Bitte eine Telefonnummer eingeben.'; render(); return; }
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) { state.selfRegisterError = 'Bitte eine g\u00fcltige Telefonnummer eingeben (mindestens 4 Ziffern).'; render(); return; }
+  const code = digits.slice(-4);
   const id = 'e'+Date.now();
-  state.employees.push({id, name, phone, code, competencies: [], maxShiftsPerDay: 1});
+  state.employees.push({id, name, phone, code, competencies: [], maxShiftsPerDay: 2});
   state.employeeViewSelectedId = id;
   state.employeeViewJustRegisteredCode = code;
   input.value = '';
   if (phoneInput) phoneInput.value = '';
-  if (codeInput) codeInput.value = '';
+  render();
+}
+function setEmployeeCode(empId, value){
+  const emp = state.employees.find(e=>e.id===empId);
+  if (!emp) return;
+  const code = (value || '').trim().toUpperCase();
+  emp.code = code || generateEmployeeCode();
   render();
 }
 function regenerateEmployeeCode(empId){
@@ -819,14 +826,13 @@ function renderEmployeeView(){
     html += '<p class="panel-label">Noch kein Zugang?</p>';
     html += '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
     html += '<input id="new-self-emp-name" type="text" placeholder="Dein Name" style="width:160px;" />';
-    html += '<input id="new-self-emp-phone" type="tel" placeholder="Telefonnummer" style="width:160px;" />';
-    html += '<input id="new-self-emp-code" type="text" placeholder="Code w&auml;hlen (min. 4 Zeichen)" style="width:200px; text-transform:uppercase;" />';
+    html += '<input id="new-self-emp-phone" type="tel" placeholder="Telefonnummer *" style="width:160px;" />';
     html += '<button id="add-self-emp">+ Neu erfassen</button>';
     html += '</div>';
     if (state.selfRegisterError) {
       html += '<p style="color:#b3261e; font-size:12px; margin-top:8px;">'+state.selfRegisterError+'</p>';
     }
-    html += '<p class="hint" style="margin-top:8px;">W&auml;hle selbst einen pers&ouml;nlichen Code, mit dem du dich k&uuml;nftig anmeldest.</p>';
+    html += '<p class="hint" style="margin-top:8px;">Telefonnummer ist erforderlich. Dein pers&ouml;nlicher Code sind automatisch die letzten 4 Ziffern deiner Telefonnummer.</p>';
     html += '</div>';
     return html;
   }
@@ -917,8 +923,6 @@ function wireEmployeeView(){
   if (selfInput) selfInput.onkeydown = (e)=>{ if(e.key==='Enter') addSelfEmployee(); };
   const selfPhoneInput = document.getElementById('new-self-emp-phone');
   if (selfPhoneInput) selfPhoneInput.onkeydown = (e)=>{ if(e.key==='Enter') addSelfEmployee(); };
-  const selfCodeInput = document.getElementById('new-self-emp-code');
-  if (selfCodeInput) selfCodeInput.onkeydown = (e)=>{ if(e.key==='Enter') addSelfEmployee(); };
   const maxShiftsInput = document.getElementById('self-max-shifts');
   if (maxShiftsInput) maxShiftsInput.onchange = ()=>{
     setMaxShifts(state.employeeViewSelectedId, maxShiftsInput.value);
@@ -1155,7 +1159,7 @@ function renderAdminView(){
     html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
     html += '<span style="font-weight:600;">'+emp.name+'</span>';
     html += '<div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">';
-    html += '<span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Code <strong style="font-family:monospace; font-size:13px; letter-spacing:1px; color:var(--text);">'+(emp.code||'\u2013')+'</strong> <button data-regen-code-emp="'+emp.id+'" title="Neuen Code generieren" style="padding:4px 8px; font-size:11px;">&#8635;</button></span>';
+    html += '<span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Code <input type="text" value="'+(emp.code||'')+'" data-code-emp="'+emp.id+'" maxlength="8" style="width:80px; height:28px; padding:4px 6px; font-family:monospace; font-size:13px; letter-spacing:1px; text-transform:uppercase;" /> <button data-regen-code-emp="'+emp.id+'" title="Zuf&auml;lligen Code generieren" style="padding:4px 8px; font-size:11px;">&#8635;</button></span>';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Telefon <input type="tel" value="'+(emp.phone||'')+'" placeholder="Telefonnummer" data-phone-emp="'+emp.id+'" style="width:140px; height:30px; padding:4px 8px;" /></label>';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">Max. Schichten/Tag <input type="number" min="1" max="'+state.shiftTypes.length+'" value="'+getMaxShifts(emp)+'" data-max-shifts-emp="'+emp.id+'" style="width:54px; height:30px; padding:4px 6px; text-align:center;" /></label>';
     html += '<button class="chip-remove" data-remove-emp="'+emp.id+'" aria-label="Mitarbeiter entfernen">&times;</button>';
@@ -1300,6 +1304,9 @@ function wireAdminView(){
   });
   app.querySelectorAll('[data-phone-emp]').forEach(el=>{
     el.onchange = ()=>{ setEmployeePhone(el.getAttribute('data-phone-emp'), el.value); };
+  });
+  app.querySelectorAll('[data-code-emp]').forEach(el=>{
+    el.onchange = ()=>setEmployeeCode(el.getAttribute('data-code-emp'), el.value);
   });
   app.querySelectorAll('[data-regen-code-emp]').forEach(el=>{
     el.onclick = ()=>regenerateEmployeeCode(el.getAttribute('data-regen-code-emp'));
