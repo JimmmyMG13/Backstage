@@ -829,6 +829,23 @@ function toggleEmployeeCompetency(empId, postenId){
 function isQualifiedForPosten(emp, postenId){
   return emp.competencies && emp.competencies.indexOf(postenId) >= 0;
 }
+// Löscht ALLE Zuweisungen (alle Mitarbeiter) für den aktuell gewählten Tag, nach Bestätigung
+function clearDayAssignments(){
+  const dk = dateKey(state.selectedDate);
+  showConfirm('Alle Schicht-Zuweisungen am '+fmtDate(state.selectedDate)+' l\u00f6schen? Das betrifft alle Mitarbeiter.', ()=>{
+    let cleared = 0;
+    const day = state.postenAssignments[dk];
+    if (day) {
+      Object.keys(day).forEach(shiftId=>{
+        const slots = day[shiftId];
+        Object.keys(slots).forEach(pid=>{
+          if (slots[pid]) { slots[pid] = null; cleared++; }
+        });
+      });
+    }
+    showToast(cleared ? (cleared === 1 ? '1 Zuweisung gel\u00f6scht' : cleared+' Zuweisungen gel\u00f6scht') : 'Keine Zuweisungen an diesem Tag');
+  }, {confirmLabel:'L\u00f6schen'});
+}
 // Löscht die Schicht-Zuweisungen eines Mitarbeiters für den aktuell gewählten Tag, nach Bestätigung
 function clearEmployeeAssignments(empId){
   const emp = state.employees.find(e=>e.id===empId);
@@ -1482,6 +1499,7 @@ function renderAdminView(){
   html += renderDateNav();
   html += '<div style="display:flex; gap:8px;">';
   html += '<button id="auto-assign">&#9889; Automatisch zuweisen</button>';
+  html += '<button id="clear-day-assign">&#128465; Zuweisungen l&ouml;schen</button>';
   html += '<button id="export-excel">&#11015; Excel exportieren</button>';
   html += '<button id="export-pdf">&#128196; PDF exportieren</button>';
   html += '<button id="open-pw-modal">Passwort &auml;ndern</button>';
@@ -1730,6 +1748,8 @@ function wireAdminView(){
   wireDateNav();
   const autoAssignBtn = document.getElementById('auto-assign');
   if (autoAssignBtn) autoAssignBtn.onclick = autoAssignDay;
+  const clearDayBtn = document.getElementById('clear-day-assign');
+  if (clearDayBtn) clearDayBtn.onclick = clearDayAssignments;
   const exportExcelBtn = document.getElementById('export-excel');
   const exportPdfBtn = document.getElementById('export-pdf');
   if (exportExcelBtn) exportExcelBtn.onclick = exportExcel;
