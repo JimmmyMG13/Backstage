@@ -266,14 +266,58 @@
 
   /* Größere Tippflächen auf schmalen Bildschirmen (Handy) */
   @media (max-width: 640px) {
+    body { padding:10px; }
+    .panel { padding:12px; margin-bottom:14px; }
     button { padding:11px 16px; min-height:44px; }
-    input, select { min-height:44px; }
+    input, select { min-height:44px; font-size:16px; } /* 16px verhindert Auto-Zoom auf iOS */
+    textarea { font-size:16px !important; }
     input[type="checkbox"] { width:20px; height:20px; }
-    .chip-remove { width:34px; height:34px; font-size:17px; }
-    .theme-toggle { width:44px; }
+    .chip-remove { width:34px; height:34px; font-size:17px; min-height:34px; padding:0; }
+    .theme-toggle { width:44px; flex-shrink:0; }
     .emp-shift-option { padding:12px 14px; }
     .emp-shift-option input { width:20px; height:20px; }
     .comp-tag { padding:10px 14px; font-size:13px; }
+
+    /* Tab-Leiste: horizontal scrollbar statt Umbruch */
+    .view-switch { gap:8px; }
+    .view-switch-left { overflow-x:auto; -webkit-overflow-scrolling:touch; flex:1; padding-bottom:2px; }
+    .view-btn { white-space:nowrap; flex-shrink:0; }
+
+    /* Feste Input-Breiten überschreiben: volle Breite nutzen */
+    input[type="text"], input[type="tel"], input[type="password"], input[type="number"], input[type="date"], select {
+      width:100% !important; max-width:100%;
+    }
+    input[type="number"] { width:70px !important; }
+    input[type="color"] { min-height:0; }
+    select { min-width:0; }
+
+    /* Toolbar (Planung/Tagesübersicht): kompakte Bedienelemente in einer Reihe */
+    .toolbar { gap:8px; }
+    .toolbar > div { display:flex; flex-wrap:wrap; gap:6px; }
+    .toolbar button { min-height:34px; padding:6px 10px; font-size:12px; width:auto !important; }
+
+    /* Datumsnavigation kompakt */
+    .date-nav { gap:6px; }
+    .date-nav .day-picker { width:auto !important; min-width:130px; min-height:34px; font-size:16px; padding:4px 8px; }
+    .day-prev, .day-next { width:38px; min-height:34px; flex-shrink:0; padding:0; font-size:17px; }
+
+    /* Posten-Zeilen in der Planung: gestapelt statt gequetscht */
+    .posten-row { flex-direction:column; align-items:stretch; gap:6px; padding:10px; }
+    .posten-row select { width:100%; }
+    .posten-name { font-size:14px; }
+    .posten-warning-badge { align-self:flex-start; }
+
+    /* Mitarbeiter-Karten: Steuerelemente untereinander */
+    .emp-card > div:first-child > div { flex-direction:column; align-items:stretch !important; gap:8px !important; }
+    .emp-card label, .emp-card > div:first-child span { justify-content:space-between; }
+    .emp-card .chip-remove { align-self:flex-end; }
+
+    /* Chips (Schichttypen/Posten-Verwaltung) dürfen umbrechen */
+    .chip { flex-wrap:wrap; }
+
+    /* Modals nicht am Rand kleben */
+    .modal-overlay { padding:12px; }
+    .toast { white-space:normal; text-align:center; max-width:90vw; }
   }
 </style>
 <script>
