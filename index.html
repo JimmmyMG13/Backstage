@@ -114,7 +114,7 @@
   .date-label { font-size:16px; font-weight:600; min-width:160px; text-align:center; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:20px; }
   .panel-label { font-size:13px; color:var(--text-muted); margin:0 0 10px; }
-  .panel-arrow { font-size:25px; color:var(--text-muted); line-height:1; flex-shrink:0; }
+  .panel-arrow { font-size:18px; color:var(--text-muted); line-height:1; flex-shrink:0; }
   .panel-header:hover .panel-arrow { color:var(--text); }
   .panel-header:hover .panel-label { color:var(--text); }
   .chip { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:8px; border:1px solid var(--border); }
@@ -279,7 +279,7 @@
     .emp-shift-option { padding:12px 14px; }
     .emp-shift-option input { width:20px; height:20px; }
     .comp-tag { padding:10px 14px; font-size:13px; }
-    .panel-arrow { font-size:30px; }
+    .panel-arrow { font-size:22px; }
 
     /* Tab-Leiste: horizontal scrollbar statt Umbruch */
     .view-switch { gap:8px; }
@@ -637,6 +637,19 @@ function setPostenAssignment(dKey, shiftId, postenId, empId){
   }
   state.postenAssignments[dKey][shiftId][postenId] = empId;
 }
+// Prüft, ob eine (zusätzliche) Zuweisung dazu führen würde, dass der Mitarbeiter
+// 3 Schichten direkt hintereinander hätte (ohne Pausen-Schicht dazwischen).
+// Grundlage ist die Reihenfolge der Schichttypen (= Tagesablauf).
+function wouldCreateTripleRun(empId, dKey, extraShiftId){
+  const indices = [];
+  state.shiftTypes.forEach((st, idx)=>{
+    if (st.id === extraShiftId || findPostenForEmployeeInShift(dKey, st.id, empId)) indices.push(idx);
+  });
+  for (let i = 0; i + 2 < indices.length; i++){
+    if (indices[i+1] === indices[i]+1 && indices[i+2] === indices[i]+2) return true;
+  }
+  return false;
+}
 function autoAssignDay(){
   const dKey = dateKey(state.selectedDate);
   let filled = 0;
@@ -657,7 +670,8 @@ function autoAssignDay(){
         isAvailable(emp.id, dKey, st.id) &&
         !unavailEmp(emp.id) &&
         !usedInShift.has(emp.id) &&
-        dayCount[emp.id] < getMaxShifts(emp)
+        dayCount[emp.id] < getMaxShifts(emp) &&
+        !wouldCreateTripleRun(emp.id, dKey, st.id)
       );
       if (candidate) {
         setPostenAssignment(dKey, st.id, p.id, candidate.id);
@@ -1764,9 +1778,14 @@ function wireAdminView(){
       };
       if (newEmpId) {
         const emp = state.employees.find(e=>e.id===newEmpId);
-        if (emp && !isAvailable(emp.id, dKey, shiftId)) {
-          showConfirm(emp.name+' hat diese Schicht nicht als verf\u00fcgbar gemeldet. Trotzdem zuweisen?', applyAssignment, {confirmLabel:'Trotzdem zuweisen', danger:false});
-          return;
+        if (emp) {
+          const warnings = [];
+          if (!isAvailable(emp.id, dKey, shiftId)) warnings.push('hat diese Schicht nicht als verf\u00fcgbar gemeldet');
+          if (wouldCreateTripleRun(emp.id, dKey, shiftId)) warnings.push('h\u00e4tte damit 3 Schichten direkt hintereinander ohne Pause');
+          if (warnings.length) {
+            showConfirm(emp.name+' '+warnings.join(' und ')+'. Trotzdem zuweisen?', applyAssignment, {confirmLabel:'Trotzdem zuweisen', danger:false});
+            return;
+          }
         }
       }
       applyAssignment();
