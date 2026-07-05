@@ -595,7 +595,6 @@ function addEmployee(){
 function addSelfEmployee(){
   const input = document.getElementById('new-self-emp-name');
   const phoneInput = document.getElementById('new-self-emp-phone');
-  const rememberInput = document.getElementById('new-self-emp-remember');
   const name = (input.value || '').trim();
   const phone = phoneInput ? (phoneInput.value || '').trim() : '';
   state.selfRegisterError = null;
@@ -608,9 +607,6 @@ function addSelfEmployee(){
   state.employees.push({id, name, phone, code, competencies: [], maxShiftsPerDay: 2});
   state.employeeViewSelectedId = id;
   state.employeeViewJustRegisteredCode = code;
-  if (rememberInput && rememberInput.checked) {
-    try { localStorage.setItem('schichtplan_emp_id', id); } catch(e) {}
-  }
   input.value = '';
   if (phoneInput) phoneInput.value = '';
   render();
@@ -631,7 +627,6 @@ function regenerateEmployeeCode(empId){
 function tryEmployeeLogin(){
   const nameInput = document.getElementById('emp-login-name');
   const codeInput = document.getElementById('emp-login-code');
-  const rememberInput = document.getElementById('emp-login-remember');
   if (!nameInput || !codeInput) return;
   const name = (nameInput.value || '').trim().toLowerCase();
   const code = (codeInput.value || '').trim().toUpperCase();
@@ -640,9 +635,6 @@ function tryEmployeeLogin(){
     state.employeeViewSelectedId = emp.id;
     state.employeeViewLoginError = false;
     state.employeeViewJustRegisteredCode = null;
-    if (rememberInput && rememberInput.checked) {
-      try { localStorage.setItem('schichtplan_emp_id', emp.id); } catch(e) {}
-    }
   } else {
     state.employeeViewLoginError = true;
   }
@@ -920,7 +912,6 @@ function renderEmployeeView(){
     html += '<input id="emp-login-code" type="text" placeholder="Code" style="width:120px; text-transform:uppercase;" />';
     html += '<button id="emp-login-btn">Anmelden</button>';
     html += '</div>';
-    html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin-top:8px;"><input type="checkbox" id="emp-login-remember" style="width:14px; height:14px; margin:0;" /> Angemeldet bleiben (nur auf eigenem Ger&auml;t verwenden)</label>';
     if (state.employeeViewLoginError) {
       html += '<p style="color:#b3261e; font-size:12px; margin-top:8px;">Name oder Code stimmen nicht. Bitte beim Planer nachfragen.</p>';
     }
@@ -933,7 +924,6 @@ function renderEmployeeView(){
     html += '<input id="new-self-emp-phone" type="tel" placeholder="Telefonnummer *" style="width:160px;" />';
     html += '<button id="add-self-emp">+ Neu erfassen</button>';
     html += '</div>';
-    html += '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); margin-top:8px;"><input type="checkbox" id="new-self-emp-remember" style="width:14px; height:14px; margin:0;" /> Angemeldet bleiben (nur auf eigenem Ger&auml;t verwenden)</label>';
     if (state.selfRegisterError) {
       html += '<p style="color:#b3261e; font-size:12px; margin-top:8px;">'+state.selfRegisterError+'</p>';
     }
