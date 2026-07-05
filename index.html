@@ -150,6 +150,7 @@
 
   @media print {
     button, .footer-row, #new-emp-name, .panel, .view-switch { display:none !important; }
+    .print-only { display:block !important; }
     :root, [data-theme="dark"] {
       --bg: #ffffff;
       --text: #1f1f1d;
@@ -170,6 +171,8 @@
     }
   }
 
+
+  .print-only { display:none; }
 
   .app-header { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
   .app-logo { width:36px; height:36px; object-fit:contain; }
@@ -310,7 +313,7 @@ let state = {
   wishes: {},
   nextShiftColorIdx: 0,
   nextPostenColorIdx: 3,
-  view: 'admin', // 'admin' | 'daily' | 'employee'
+  view: 'employee', // 'admin' | 'daily' | 'employee'
   employeeViewSelectedId: null,
   adminPassword: '1234',
   adminUnlocked: false,
@@ -712,6 +715,17 @@ function exportExcel(){
   ws['!cols'] = [{wch:12},{wch:20},{wch:22},{wch:22}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Schichtplan');
+
+  const empHeaderRow = ['Name', 'Telefon', 'Kompetenzen', 'Max. Schichten/Tag'];
+  const empRows = [empHeaderRow];
+  [...state.employees].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(emp=>{
+    const comps = state.posten.filter(p=>isQualifiedForPosten(emp,p.id)).map(p=>p.name).join(', ');
+    empRows.push([emp.name, emp.phone || '', comps, getMaxShifts(emp)]);
+  });
+  const wsEmp = XLSX.utils.aoa_to_sheet(empRows);
+  wsEmp['!cols'] = [{wch:22},{wch:16},{wch:30},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsEmp, 'Mitarbeiter');
+
   XLSX.writeFile(wb, 'Schichtplan_'+dKey+'.xlsx');
 }
 function exportPdf(){ window.print(); }
@@ -1258,6 +1272,26 @@ function renderAdminView(){
   });
 
   html += '<p class="hint" style="margin-top:8px;">'+state.employees.length+' Mitarbeiter · &#10003; markiert vom Mitarbeiter gemeldete Verf&uuml;gbarkeit f&uuml;r dieses Datum</p>';
+
+  html += '<div class="print-only" style="margin-top:24px;">';
+  html += '<p style="font-weight:600; font-size:15px; margin:0 0 10px;">Mitarbeiter&uuml;bersicht</p>';
+  html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+  html += '<thead><tr>';
+  ['Name','Telefon','Kompetenzen','Max. Schichten/Tag'].forEach(h=>{
+    html += '<th style="text-align:left; border-bottom:1px solid #d6d3c9; padding:6px 8px;">'+h+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+  [...state.employees].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(emp=>{
+    const comps = state.posten.filter(p=>isQualifiedForPosten(emp,p.id)).map(p=>p.name).join(', ');
+    html += '<tr>';
+    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+emp.name+'</td>';
+    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+(emp.phone||'\u2013')+'</td>';
+    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+(comps||'\u2013')+'</td>';
+    html += '<td style="padding:6px 8px; border-bottom:1px solid #eeece4;">'+getMaxShifts(emp)+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '</div>';
 
   return html;
 }
